@@ -1,13 +1,13 @@
 package io.github.w3bray.calc
 
-import java.math.BigDecimal
-
 /**
  * The calculator's input state plus the key-handling rules of a normal phone calculator:
  * leading zeros, one dot per number, operator replacement, unary minus, balanced ")",
  * "digit after = starts over / operator after = continues from the result", error state.
  *
- * Pure Kotlin (unit-tested). CalcView only draws this state and forwards button presses.
+ * Continuing from a result keeps the EXACT value of that result (1/3 = then *3 = gives 1), while
+ * the display keeps showing the short rounded text. Pure Kotlin (unit-tested); CalcView only
+ * draws this state and forwards button presses.
  */
 class CalcInput(private val maxLength: Int = Config.MAX_EXPR_LENGTH) {
 
@@ -23,8 +23,12 @@ class CalcInput(private val maxLength: Int = Config.MAX_EXPR_LENGTH) {
     var error: Boolean = false
         private set
 
-    /** Full digits of the last result (the display may use scientific notation). */
-    private var resultPlain: String? = null
+    /**
+     * Exact value of the last result and the text it is displayed with. While [expr] still starts
+     * with that text, evaluation substitutes the exact value for it.
+     */
+    private var answer: Evaluator.Value? = null
+    private var answerText: String? = null
 
     fun displayText(errorText: String): String = when {
         error -> errorText
@@ -44,7 +48,7 @@ class CalcInput(private val maxLength: Int = Config.MAX_EXPR_LENGTH) {
             else -> {
                 val ch = label.singleOrNull() ?: return Event.NONE
                 when {
-                    ch.isDigit() -> typeDigit(ch)
+                    ch in '0'..'9' -> typeDigit(ch)
                     ch == '.' -> typeDot()
                     ch == '(' -> typeOpen()
                     ch == ')' -> typeClose()
@@ -56,63 +60,91 @@ class CalcInput(private val maxLength: Int = Config.MAX_EXPR_LENGTH) {
         return Event.NONE
     }
 
+    /** Restores state saved by the activity. The exact value is gone, so the displayed digits are reused. */
     fun restore(expr: String, justEvaluated: Boolean, error: Boolean) {
         this.expr = expr
-        this.justEvaluated = justEvaluated
+        this.justEvaluated = justEvaluated && !error
         this.error = error
-        resultPlain = if (justEvaluated) plainDigits(expr) else null
+        answer = null
+        answerText = null
+        if (this.justEvaluated) {
+            val result = Evaluator.evaluate(expr)
+            if (result != null) {
+                answer = result.value
+                answerText = expr
+            } else {
+                this.justEvaluated = false
+            }
+        }
     }
 
     private fun clear() {
         expr = ""
         justEvaluated = false
         error = false
-        resultPlain = null
+        answer = null
+        answerText = null
     }
 
     private val last: Char?
         get() = expr.lastOrNull()
 
-    private fun isOperator(c: Char?): Boolean = c != null && c in "+-*/"
+    private fun isOperator(c: Char?): Boolean = c != null && Evaluator.isOperator(c)
 
-    private fun hasRoom(): Boolean = expr.length < maxLength
+    private fun fits(extraChars: Int): Boolean = expr.length + extraChars <= maxLength
 
     /** The digits/dot run at the end of the expression, i.e. the number being typed. */
-    private fun currentNumber(): String = expr.takeLastWhile { it.isDigit() || it == '.' }
+    private fun currentNumber(): String = expr.takeLastWhile { it in '0'..'9' || it == '.' }
 
+    /** After "=", digits, "." and "(" start a new expression. */
     private fun startFreshIfJustEvaluated() {
         if (justEvaluated) {
             expr = ""
             justEvaluated = false
-            resultPlain = null
+            answer = null
+            answerText = null
+        }
+        // "8" "+" "⌫" then "5": the user is now editing the digits of the result into "85",
+        // so the text no longer stands for the exact value.
+        if (expr == answerText) {
+            answer = null
+            answerText = null
         }
     }
 
-    private fun continueFromResultIfJustEvaluated() {
-        if (justEvaluated) {
-            expr = resultPlain ?: expr
-            justEvaluated = false
-            resultPlain = null
-        }
+    /** The exact value applies only while the result text is followed by an operator (or nothing). */
+    private fun boundAnswer(): Evaluator.Value? {
+        val value = answer ?: return null
+        val text = answerText ?: return null
+        if (!expr.startsWith(text)) return null
+        if (expr.length > text.length && !isOperator(expr[text.length])) return null
+        return value
+    }
+
+    /** After "=", an operator continues from the result; the exact value stays bound to its text. */
+    private fun continueFromResultIfJustEvaluated(): Boolean {
+        if (!justEvaluated) return false
+        justEvaluated = false
+        return true
     }
 
     private fun typeDigit(ch: Char) {
         startFreshIfJustEvaluated()
         if (currentNumber() == "0") expr = expr.dropLast(1) // "0" then "5" shows "5", not "05"
-        if (hasRoom()) expr += ch
+        if (fits(1)) expr += ch
     }
 
     private fun typeDot() {
         startFreshIfJustEvaluated()
         val number = currentNumber()
         if ('.' in number) return // one dot per number
-        if (!hasRoom()) return
-        expr += if (number.isEmpty()) "0." else "."
+        val add = if (number.isEmpty()) "0." else "."
+        if (fits(add.length)) expr += add
     }
 
     private fun typeOpen() {
         startFreshIfJustEvaluated()
-        if (hasRoom()) expr += '('
+        if (fits(1)) expr += '('
     }
 
     private fun typeClose() {
@@ -120,20 +152,20 @@ class CalcInput(private val maxLength: Int = Config.MAX_EXPR_LENGTH) {
         val unclosed = expr.count { it == '(' } - expr.count { it == ')' }
         if (unclosed <= 0) return
         if (last == null || last == '(' || isOperator(last)) return
-        if (hasRoom()) expr += ')'
+        if (fits(1)) expr += ')'
     }
 
     private fun typeMinus() {
-        continueFromResultIfJustEvaluated()
+        val continued = continueFromResultIfJustEvaluated()
         if (last == '-') return // never "--"
-        if (hasRoom()) expr += '-' // subtraction after a number / ")", unary minus elsewhere
+        if (continued || fits(1)) expr += '-' // subtraction after a number / ")", unary minus elsewhere
     }
 
     private fun typeOperator(ch: Char) {
-        continueFromResultIfJustEvaluated()
+        val continued = continueFromResultIfJustEvaluated()
         while (isOperator(last)) expr = expr.dropLast(1) // "5*-" then "+" becomes "5+"
         if (expr.isEmpty() || last == '(') return
-        if (hasRoom()) expr += ch
+        if (continued || fits(1)) expr += ch
     }
 
     private fun backspace() {
@@ -142,6 +174,12 @@ class CalcInput(private val maxLength: Int = Config.MAX_EXPR_LENGTH) {
             return
         }
         expr = expr.dropLast(1)
+        // Editing into the result's own digits means the text no longer stands for the exact value.
+        val text = answerText
+        if (text != null && !expr.startsWith(text)) {
+            answer = null
+            answerText = null
+        }
     }
 
     private fun evaluate(): Event {
@@ -150,24 +188,29 @@ class CalcInput(private val maxLength: Int = Config.MAX_EXPR_LENGTH) {
             return Event.NONE
         }
         if (justEvaluated || expr.isEmpty()) return Event.NONE
-        val result = Evaluator.evaluate(expr)
+        // Only "(" / operators typed so far: nothing to compute yet, keep the text as it is.
+        if (Evaluator.isAccepted(expr) && Evaluator.isBlank(expr)) return Event.NONE
+
+        val boundValue = boundAnswer()
+        val result = if (boundValue != null) {
+            Evaluator.evaluate(Evaluator.ANSWER_TOKEN + expr.substring(answerText!!.length), boundValue)
+        } else {
+            Evaluator.evaluate(expr)
+        }
+
         return if (result == null) {
             expr = ""
             error = true
             justEvaluated = false
-            resultPlain = null
+            answer = null
+            answerText = null
             Event.ERROR
         } else {
             expr = result.display
-            resultPlain = result.plain
+            answer = result.value
+            answerText = result.display
             justEvaluated = true
             Event.EVALUATED
         }
-    }
-
-    private fun plainDigits(text: String): String = try {
-        BigDecimal(text).toPlainString()
-    } catch (e: NumberFormatException) {
-        text
     }
 }

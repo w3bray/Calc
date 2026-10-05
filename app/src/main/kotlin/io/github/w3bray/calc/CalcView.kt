@@ -11,12 +11,14 @@ import android.graphics.Shader
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.util.Log
 import android.util.TypedValue
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowInsets
+import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.random.Random
@@ -53,8 +55,13 @@ class CalcView(context: Context) : View(context) {
         get() = overlayPhase != OverlayPhase.OFF
 
     // --- surprise schedule ---
+    // The countdown only runs while the app is in front: on pause the remaining time is saved
+    // (also across process death) and on resume it continues, so short calculator sessions add
+    // up instead of restarting the wait every time.
     private var pranksArmed = false
+    private var prankDeadlineMs = 0L // SystemClock.elapsedRealtime() when the next surprise is due; 0 = none
     private val prankRunnable = Runnable { onPrankTimer() }
+    private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     // --- assets ---
     private var background: Bitmap? = null
@@ -285,7 +292,7 @@ class CalcView(context: Context) : View(context) {
     /** Starts the fade-in (and the sound) unless the overlay is already showing. */
     fun triggerOverlay() {
         if (overlayPhase != OverlayPhase.OFF) return
-        removeCallbacks(prankRunnable)
+        clearPendingPrank() // a new countdown starts once the image is gone
         overlayPhase = OverlayPhase.FADE_IN
         overlayAlpha = 0f
         phaseElapsed = 0f
@@ -306,36 +313,60 @@ class CalcView(context: Context) : View(context) {
 
     /** Removes the overlay immediately (used when the app goes to the background). */
     fun cancelOverlayNow() {
+        val wasShowing = overlayPhase != OverlayPhase.OFF
         overlayPhase = OverlayPhase.OFF
         overlayAlpha = 0f
         phaseElapsed = 0f
         invalidate()
+        if (wasShowing && pranksArmed) scheduleNextPrank() // never leave the schedule empty while armed
     }
 
-    /** Arms the random timer (call from Activity.onResume). */
+    /** Arms the countdown (call from Activity.onResume), continuing a saved one if there is any. */
     fun startPranks() {
         pranksArmed = true
-        scheduleNextPrank()
+        if (!Config.PRANK_ENABLED) return
+        val saved = prefs.getLong(KEY_PRANK_REMAINING_MS, -1L)
+        if (saved >= 0L) schedulePrankIn(saved.coerceAtLeast(MIN_RESUME_DELAY_MS)) else scheduleNextPrank()
     }
 
-    /** Disarms the random timer (call from Activity.onPause). */
+    /** Pauses the countdown (call from Activity.onPause) and remembers how much of it is left. */
     fun stopPranks() {
         pranksArmed = false
         removeCallbacks(prankRunnable)
+        if (prankDeadlineMs > 0L) {
+            val remaining = (prankDeadlineMs - SystemClock.elapsedRealtime()).coerceAtLeast(0L)
+            prefs.edit().putLong(KEY_PRANK_REMAINING_MS, remaining).apply()
+            prankDeadlineMs = 0L
+        }
     }
 
+    /** Draws a fresh random delay between the configured bounds. */
     private fun scheduleNextPrank() {
-        removeCallbacks(prankRunnable)
         if (!pranksArmed || !Config.PRANK_ENABLED) return
         val lo = min(Config.PRANK_MIN_INTERVAL_SECONDS, Config.PRANK_MAX_INTERVAL_SECONDS).coerceAtLeast(1f)
         val hi = max(Config.PRANK_MIN_INTERVAL_SECONDS, Config.PRANK_MAX_INTERVAL_SECONDS)
         val seconds = if (hi > lo) Random.nextDouble(lo.toDouble(), hi.toDouble()).toFloat() else lo
-        Log.i(Media.TAG, "[overlay] next surprise in %.1f s".format(seconds))
-        postDelayed(prankRunnable, (seconds * 1000f).toLong())
+        schedulePrankIn((seconds * 1000f).toLong())
+    }
+
+    private fun schedulePrankIn(delayMs: Long) {
+        removeCallbacks(prankRunnable)
+        if (!pranksArmed || !Config.PRANK_ENABLED) return
+        prankDeadlineMs = SystemClock.elapsedRealtime() + delayMs
+        prefs.edit().putLong(KEY_PRANK_REMAINING_MS, delayMs).apply() // survives a process kill mid-countdown
+        Log.i(Media.TAG, "[overlay] next surprise in ${"%.1f".format(Locale.ROOT, delayMs / 1000f)} s")
+        postDelayed(prankRunnable, delayMs)
+    }
+
+    private fun clearPendingPrank() {
+        removeCallbacks(prankRunnable)
+        prankDeadlineMs = 0L
+        prefs.edit().remove(KEY_PRANK_REMAINING_MS).apply()
     }
 
     private fun onPrankTimer() {
         if (!pranksArmed) return
+        clearPendingPrank()
         if (overlayPhase == OverlayPhase.OFF) triggerOverlay() else scheduleNextPrank()
     }
 
@@ -482,5 +513,8 @@ class CalcView(context: Context) : View(context) {
         const val KEY_JUST_EVALUATED = "calc.justEvaluated"
         const val KEY_ERROR = "calc.error"
         const val MAX_FRAME_DT = 0.25f
+        const val PREFS_NAME = "calc"
+        const val KEY_PRANK_REMAINING_MS = "prank.remainingMs"
+        const val MIN_RESUME_DELAY_MS = 3_000L // never the very instant the app comes back
     }
 }

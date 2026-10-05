@@ -1,10 +1,12 @@
 name: Build APK
 
+# Every push to any branch builds (the run shows up on the branch's pull request too), tags
+# publish releases, and the workflow can be started by hand. There is no separate
+# pull_request trigger on purpose: it would run the exact same build a second time.
 on:
   push:
     branches: ["**"]
     tags: ["v*"]
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -55,7 +57,7 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk Calc.apk
           ls -la Calc.apk
 
-      # Every run (any branch / PR) keeps the APK as a downloadable artifact.
+      # Every run keeps the APK as a downloadable artifact (Actions tab -> run -> Artifacts).
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:

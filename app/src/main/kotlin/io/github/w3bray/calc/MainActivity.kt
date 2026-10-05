@@ -6,17 +6,21 @@ import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
 import android.view.View
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
 
 class MainActivity : Activity(), CalcView.Listener {
 
     private lateinit var calcView: CalcView
     private lateinit var audio: CalcAudio
+    private var backCallback: OnBackInvokedCallback? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         title = Config.TITLE
         volumeControlStream = AudioManager.STREAM_MUSIC
         setupEdgeToEdge()
+        setupBackHandling()
 
         audio = CalcAudio(this)
         calcView = CalcView(this).also { it.listener = this }
@@ -45,6 +49,29 @@ class MainActivity : Activity(), CalcView.Listener {
         }
     }
 
+    /**
+     * Back (button or gesture) does NOT close the app unless Config.BACK_BUTTON_CLOSES_APP is true.
+     * Home and the recent-apps screen keep working. Two paths cover every Android version:
+     * onBackPressed() below (the classic path, used while predictive back is off) and, on
+     * Android 13+, an OnBackInvokedCallback that swallows Back when predictive back is on.
+     */
+    private fun setupBackHandling() {
+        if (Config.BACK_BUTTON_CLOSES_APP) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val callback = OnBackInvokedCallback { /* Back is intentionally ignored */ }
+            onBackInvokedDispatcher.registerOnBackInvokedCallback(OnBackInvokedDispatcher.PRIORITY_DEFAULT, callback)
+            backCallback = callback
+        }
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        if (Config.BACK_BUTTON_CLOSES_APP) {
+            @Suppress("DEPRECATION")
+            super.onBackPressed()
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         audio.resumeAll()
@@ -61,23 +88,16 @@ class MainActivity : Activity(), CalcView.Listener {
     override fun onDestroy() {
         super.onDestroy()
         audio.release()
+        val callback = backCallback
+        if (callback != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            onBackInvokedDispatcher.unregisterOnBackInvokedCallback(callback)
+        }
+        backCallback = null
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         calcView.saveState(outState)
-    }
-
-    /**
-     * Back (button or gesture) does NOT close the app unless Config.BACK_BUTTON_CLOSES_APP is true.
-     * Home and the recent-apps screen keep working normally.
-     */
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        if (Config.BACK_BUTTON_CLOSES_APP) {
-            @Suppress("DEPRECATION")
-            super.onBackPressed()
-        }
     }
 
     override fun onOverlayTriggered() {
