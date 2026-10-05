@@ -21,8 +21,9 @@ Você não precisa instalar nada no computador: o GitHub Actions compila o APK s
 2. **Build de qualquer branch / PR:** todo push dispara um run; aba **Actions** → workflow
    **Build APK** → clique no run → seção **Artifacts** → baixe `Calc-apk` (vem zipado, dentro
    está o `Calc.apk`) e `unit-test-report` (relatório dos testes).
-3. **Versão numerada:** crie uma tag `v1.0`, `v1.1`, ... (`git tag v1.1 && git push origin v1.1`)
-   e o workflow publica uma Release com o `Calc.apk` anexado.
+3. **Versão numerada:** crie uma tag igual ao `versionName` do `app/build.gradle.kts`
+   (hoje `1.2`: `git tag v1.2 && git push origin v1.2`) e o workflow publica uma Release com o
+   `Calc.apk` anexado. Ao mudar o comportamento do app, suba `versionCode` e `versionName`.
 
 No celular, abra o `Calc.apk`, permita "instalar de fontes desconhecidas" para o app
 que você usou para baixar (Chrome, Arquivos...) e instale. Todos os builds são
@@ -35,7 +36,8 @@ cima da anterior sem precisar desinstalar.
   implícita (`2(3)`), precedência correta. A aritmética é **exata** (frações, arredondadas
   uma única vez para 15 dígitos na hora de mostrar): `0.1+0.2` = `0.3` e `1/3*3-1` = `0`.
   Regras de uma calculadora de celular: zero à esquerda é substituído, só um ponto por
-  número, operador digitado em cima de outro substitui, `)` só fecha o que está aberto,
+  número, operador digitado em cima de outro substitui (o `-` depois de um operador vira
+  sinal negativo: `5+-3` = `2`), `)` só fecha o que está aberto,
   operador no fim é ignorado e parêntese aberto é fechado automaticamente ao apertar `=`.
   Depois de `=`, um dígito começa uma conta nova e um operador continua a partir do
   resultado **com o valor exato** (`1/3 = × 3 =` dá `1`). Resultados muito grandes ou
@@ -45,11 +47,11 @@ cima da anterior sem precisar desinstalar.
 - **Susto**: depois de um tempo aleatório entre 20 e 80 segundos de uso (e de novo depois
   de cada susto), `image.png` faz fade in de 1 s, fica 3 s, faz fade out de 1 s, e
   `call.mp3` toca no instante em que o fade in começa. A contagem só anda enquanto o app
-  está na frente e **continua de onde parou** quando você sai e volta (mesmo se o Android
-  matar o processo), então várias contas rápidas somam até o susto chegar; se o tempo
-  venceu enquanto o app estava fechado, ele aparece uns 3 s depois de reabrir. `C` manda a
-  imagem embora na hora (com fade out). Enquanto a imagem está na tela, os botões continuam
-  funcionando.
+  está na frente e **continua de onde parou** quando você sai e volta (o tempo restante é
+  salvo ao sair, e sobrevive até o Android encerrar o app em segundo plano), então várias
+  contas rápidas somam até o susto chegar; se faltavam menos de 3 s quando você saiu, ele
+  aparece uns 3 s depois de reabrir. `C` manda a imagem embora na hora (com fade out).
+  Enquanto a imagem está na tela, os botões continuam funcionando.
 - **Voltar não fecha o app** (botão ou gesto, inclusive com o "voltar preditivo" do
   Android 13+). Home e a tela de apps recentes funcionam.
 - **Música de fundo** (`epstien.mp3`) em loop a 35 %, pausada quando o app sai de
@@ -130,7 +132,16 @@ Studio instala tudo). Com `ANDROID_HOME` apontando para o SDK:
 
 `keystore/calc.jks` é uma chave gerada só para este projeto (senha `calc-67-67`,
 alias `calc`). Ela está no repositório de propósito, para que o CI e qualquer clone
-gerem APKs com a mesma assinatura. Não use essa chave para publicar na Play Store;
-se quiser trocar, defina as variáveis `CALC_KEYSTORE_FILE`, `CALC_KEYSTORE_PASSWORD`,
-`CALC_KEY_ALIAS` e `CALC_KEY_PASSWORD` (por exemplo via GitHub Secrets) e o
-`app/build.gradle.kts` usa a sua.
+gerem APKs com a mesma assinatura. Não use essa chave para publicar na Play Store.
+
+Para assinar com uma chave sua:
+- **No CI**: crie em Settings → Secrets and variables → Actions os segredos
+  `CALC_KEYSTORE_B64` (o arquivo `.jks`/`.p12` em base64: `base64 -w0 minha.jks`),
+  `CALC_KEYSTORE_PASSWORD`, `CALC_KEY_ALIAS` e `CALC_KEY_PASSWORD`. O workflow decodifica
+  o arquivo e repassa as variáveis ao Gradle; segredos vazios são ignorados e a chave do
+  repositório continua sendo usada.
+- **Localmente**: exporte `CALC_KEYSTORE_FILE` (caminho relativo à raiz do projeto ou
+  absoluto), `CALC_KEYSTORE_PASSWORD`, `CALC_KEY_ALIAS` e `CALC_KEY_PASSWORD` antes de rodar
+  o Gradle.
+
+Lembre que APKs assinados com chaves diferentes não instalam um por cima do outro.

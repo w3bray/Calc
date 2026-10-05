@@ -244,6 +244,6 @@ object Evaluator {
         }
     }
 
-    /** Exposed for tests: the operator characters. */
+    /** The binary operator characters (used by CalcInput and the tests). */
     fun isOperator(c: Char): Boolean = c in OPERATORS
 }

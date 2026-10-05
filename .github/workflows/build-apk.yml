@@ -12,9 +12,11 @@ on:
 permissions:
   contents: write
 
+# A newer push to a feature branch cancels the older build; a main build is never cancelled,
+# so the "latest" tag and its APK are always published together.
 concurrency:
   group: build-apk-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   build:
@@ -39,7 +41,26 @@ jobs:
       - name: Set up Gradle (with cache)
         uses: gradle/actions/setup-gradle@v4
 
+      # Optional: sign with your own key instead of the committed keystore/calc.jks.
+      # Create the repository secrets CALC_KEYSTORE_B64 (base64 of your .jks/.p12),
+      # CALC_KEYSTORE_PASSWORD, CALC_KEY_ALIAS and CALC_KEY_PASSWORD; empty secrets are ignored.
+      - name: Prepare custom signing key (only if the secret exists)
+        env:
+          CALC_KEYSTORE_B64: ${{ secrets.CALC_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$CALC_KEYSTORE_B64" ]; then
+            echo "$CALC_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/custom-signing.jks"
+            echo "CALC_KEYSTORE_FILE=$RUNNER_TEMP/custom-signing.jks" >> "$GITHUB_ENV"
+            echo "Using the custom signing key from secrets."
+          else
+            echo "No CALC_KEYSTORE_B64 secret: signing with keystore/calc.jks."
+          fi
+
       - name: Run unit tests and build release APK
+        env:
+          CALC_KEYSTORE_PASSWORD: ${{ secrets.CALC_KEYSTORE_PASSWORD }}
+          CALC_KEY_ALIAS: ${{ secrets.CALC_KEY_ALIAS }}
+          CALC_KEY_PASSWORD: ${{ secrets.CALC_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon --stacktrace :app:testReleaseUnitTest assembleRelease
