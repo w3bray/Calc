@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark Material theme without action bar; system bars are transparent so the
+         background image (and the overlay) can be drawn edge-to-edge behind them. -->
+    <style name="Theme.Calc.Base" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <style name="Theme.Calc" parent="Theme.Calc.Base" />
+</resources>
