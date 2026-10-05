@@ -20,8 +20,8 @@ android {
         applicationId = "io.github.w3bray.calc"
         minSdk = 21
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
     }
 
     signingConfigs {
@@ -64,6 +64,8 @@ android {
     }
 }
 
-// No third-party dependencies: the app only uses the Android framework + Kotlin stdlib.
+// No third-party runtime dependencies: the app only uses the Android framework + Kotlin stdlib.
+// JUnit is used by the JVM unit tests of the calculator logic (./gradlew test).
 dependencies {
+    testImplementation("junit:junit:4.13.2")
 }

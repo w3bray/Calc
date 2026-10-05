@@ -48,10 +48,13 @@ class MainActivity : Activity(), CalcView.Listener {
     override fun onResume() {
         super.onResume()
         audio.resumeAll()
+        calcView.startPranks()
     }
 
     override fun onPause() {
         super.onPause()
+        calcView.stopPranks()
+        calcView.cancelOverlayNow()
         audio.pauseAll()
     }
 
@@ -63,6 +66,18 @@ class MainActivity : Activity(), CalcView.Listener {
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
         calcView.saveState(outState)
+    }
+
+    /**
+     * Back (button or gesture) does NOT close the app unless Config.BACK_BUTTON_CLOSES_APP is true.
+     * Home and the recent-apps screen keep working normally.
+     */
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() {
+        if (Config.BACK_BUTTON_CLOSES_APP) {
+            @Suppress("DEPRECATION")
+            super.onBackPressed()
+        }
     }
 
     override fun onOverlayTriggered() {
