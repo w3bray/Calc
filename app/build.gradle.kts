@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -16,14 +18,14 @@ val calcKeyPassword = env("CALC_KEY_PASSWORD") ?: calcKeystorePassword
 
 android {
     namespace = "io.github.w3bray.calc"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "io.github.w3bray.calc"
         minSdk = 21
-        targetSdk = 34
-        versionCode = 3
-        versionName = "1.2"
+        targetSdk = 36 // Google Play requires API 36 for new apps and updates since 2026-08-31
+        versionCode = 4
+        versionName = "1.3"
     }
 
     signingConfigs {
@@ -57,12 +59,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = "17"
-    }
-
     buildFeatures {
         buildConfig = false
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
     }
 }
 

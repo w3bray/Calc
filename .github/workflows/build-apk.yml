@@ -36,7 +36,7 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: "platforms;android-34 build-tools;34.0.0"
+          packages: "platforms;android-36 build-tools;35.0.0"
 
       - name: Set up Gradle (with cache)
         uses: gradle/actions/setup-gradle@v4
@@ -63,7 +63,7 @@ jobs:
           CALC_KEY_PASSWORD: ${{ secrets.CALC_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace :app:testReleaseUnitTest assembleRelease
+          ./gradlew --no-daemon --stacktrace :app:testReleaseUnitTest assembleRelease bundleRelease
 
       - name: Upload unit test report
         if: always()
@@ -73,10 +73,11 @@ jobs:
           path: app/build/reports/tests/testReleaseUnitTest
           if-no-files-found: ignore
 
-      - name: Collect APK
+      - name: Collect APK and AAB
         run: |
           cp app/build/outputs/apk/release/app-release.apk Calc.apk
-          ls -la Calc.apk
+          cp app/build/outputs/bundle/release/app-release.aab Calc.aab
+          ls -la Calc.apk Calc.aab
 
       # Every run keeps the APK as a downloadable artifact (Actions tab -> run -> Artifacts).
       - name: Upload APK artifact
@@ -84,6 +85,14 @@ jobs:
         with:
           name: Calc-apk
           path: Calc.apk
+          if-no-files-found: error
+
+      # The Android App Bundle is what Google Play accepts (upload it in Play Console).
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Calc-aab
+          path: Calc.aab
           if-no-files-found: error
 
       # Pushes to main publish a rolling "latest" pre-release with a stable download URL:
@@ -101,7 +110,9 @@ jobs:
           tag_name: latest
           name: Latest build (main)
           prerelease: true
-          files: Calc.apk
+          files: |
+            Calc.apk
+            Calc.aab
           body: |
             Build automático do último commit em `main` (`${{ github.sha }}`).
             Baixe `Calc.apk`, instale no Android (permita "fontes desconhecidas") e pronto.
@@ -111,5 +122,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: Calc.apk
+          files: |
+            Calc.apk
+            Calc.aab
           generate_release_notes: true
