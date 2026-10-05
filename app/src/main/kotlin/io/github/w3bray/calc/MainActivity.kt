@@ -110,4 +110,8 @@ class MainActivity : Activity(), CalcView.Listener {
     override fun onOverlayTriggered() {
         audio.playOverlaySound()
     }
+
+    override fun onOverlayFinished() {
+        audio.stopOverlaySound() // the sound lasts exactly as long as the image
+    }
 }

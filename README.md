@@ -32,6 +32,10 @@ cima da anterior sem precisar desinstalar.
 
 ## O que o app faz
 
+- **Visual**: teclas de vidro sobre o fundo escurecido, operadores em laranja (o operador
+  ativo fica destacado), `=` em degradê laranja→rosa com brilho, display em cartão de vidro
+  com prévia do resultado enquanto você digita (`= 24`) e a conta anterior acima do
+  resultado. Toques têm animação e vibração leve. Cores e tamanhos ficam no `Config.kt`.
 - **Calculadora normal**: `+ - * /`, parênteses, decimais, menos unário, multiplicação
   implícita (`2(3)`), precedência correta. A aritmética é **exata** (frações, arredondadas
   uma única vez para 15 dígitos na hora de mostrar): `0.1+0.2` = `0.3` e `1/3*3-1` = `0`.
@@ -45,8 +49,9 @@ cima da anterior sem precisar desinstalar.
   zero e expressões inválidas mostram `Erro` (ou `Error` fora do português); a próxima
   tecla limpa. `=` com só um `(` ou um operador na tela não faz nada.
 - **Susto**: depois de um tempo aleatório entre 20 e 80 segundos de uso (e de novo depois
-  de cada susto), `image.png` faz fade in de 1 s, fica 3 s, faz fade out de 1 s, e
-  `call.mp3` toca no instante em que o fade in começa. A contagem só anda enquanto o app
+  de cada susto), `image.png` aparece com opacidade total por **8 segundos** (fade in de
+  0,5 s, 7 s na tela, fade out de 0,5 s) e `call.mp3` toca junto, começando com a imagem e
+  parando quando ela some. A contagem só anda enquanto o app
   está na frente e **continua de onde parou** quando você sai e volta (o tempo restante é
   salvo ao sair, e sobrevive até o Android encerrar o app em segundo plano), então várias
   contas rápidas somam até o susto chegar; se faltavam menos de 3 s quando você saiu, ele
@@ -63,8 +68,8 @@ Todos esses números ficam em `app/src/main/kotlin/io/github/w3bray/calc/Config.
 
 | Constante                                           | Padrão      | Efeito |
 |-----------------------------------------------------|-------------|--------|
-| `OVERLAY_FADE_IN_TIME` / `OVERLAY_HOLD_TIME` / `OVERLAY_FADE_OUT_TIME` | 1 s / 3 s / 1 s | duração de cada fase da imagem |
-| `OVERLAY_TARGET_ALPHA`                              | 245         | opacidade máxima (0 a 255) |
+| `OVERLAY_FADE_IN_TIME` / `OVERLAY_HOLD_TIME` / `OVERLAY_FADE_OUT_TIME` | 0,5 s / 7 s / 0,5 s | duração de cada fase da imagem (8 s no total; o som para junto) |
+| `OVERLAY_TARGET_ALPHA`                              | 255         | opacidade máxima (0 a 255; 255 = 100 %) |
 | `PRANK_MIN_INTERVAL_SECONDS` / `PRANK_MAX_INTERVAL_SECONDS` | 20 / 80 | intervalo aleatório entre sustos |
 | `PRANK_ENABLED`                                     | `true`      | `false` desliga os sustos automáticos |
 | `PRANK_ON_EQUALS_CHANCE`                            | `0`         | chance (0 a 1) de o `=` também disparar a imagem, além dos sustos aleatórios; `1` dispara em todo `=` (o resultado continua sendo o verdadeiro e a imagem some sozinha) |

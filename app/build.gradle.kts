@@ -24,8 +24,8 @@ android {
         applicationId = "io.github.w3bray.calc"
         minSdk = 21
         targetSdk = 36 // Google Play requires API 36 for new apps and updates since 2026-08-31
-        versionCode = 4
-        versionName = "1.3"
+        versionCode = 5
+        versionName = "1.4"
     }
 
     signingConfigs {
