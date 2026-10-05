@@ -7,7 +7,7 @@ com **exatamente** estes nomes:
 |-------------------|-----------------------------------------------------------------------|--------------|
 | `diddy.png.jpeg`  | imagem de fundo                                                       | não (sem ele o app desenha um degradê cinza, igual ao Python) |
 | `epstien.mp3`     | música de fundo em loop (volume 35 %)                                 | não (sem ele fica mudo) |
-| `image.png`       | imagem que aparece de surpresa (fade in, pausa, fade out)             | não (um placeholder já está incluído; troque pelo seu) |
+| `image.png`       | imagem que aparece de surpresa (fade in, pausa, fade out)             | não (sem ele o susto só toca o som)                   |
 | `call.mp3`        | som tocado no instante em que a imagem começa a aparecer              | não (sem ele fica mudo) |
 
 Qualquer formato que o Android decodifica serve (JPEG/PNG/WebP para imagens,
