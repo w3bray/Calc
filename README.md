@@ -83,7 +83,7 @@ Os arquivos ficam em **`app/src/main/assets/`** com os mesmos nomes que o `calc.
 |------------------|---------------------------------------------|
 | `diddy.png.jpeg` | imagem de fundo (sem ela: degradê cinza)    |
 | `epstien.mp3`    | música de fundo em loop, volume 35 %        |
-| `image.png`      | a imagem do susto (um placeholder já vem incluído) |
+| `image.png`      | a imagem do susto                           |
 | `call.mp3`       | som tocado no instante em que o fade in começa |
 
 Nenhum é obrigatório. Depois de colocar os arquivos, faça um push: o workflow gera um
