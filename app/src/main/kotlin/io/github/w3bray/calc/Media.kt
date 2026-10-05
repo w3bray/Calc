@@ -45,11 +45,20 @@ object Media {
         }
     }
 
-    /** Largest power-of-two factor that keeps both dimensions >= the requested size. */
+    /**
+     * Power-of-two downsampling factor: keep both dimensions >= the requested size (so a
+     * centre-crop never has to upscale), but never let the longer edge exceed [MAX_EDGE_PX],
+     * the largest texture the GPU can draw on older devices (a 6000x3375 photo on a
+     * 1080x2400 phone would otherwise decode to an 81 MB bitmap and draw nothing).
+     */
     private fun sampleSize(w: Int, h: Int, reqW: Int, reqH: Int): Int {
-        if (reqW <= 0 || reqH <= 0) return 1
         var s = 1
-        while (w / (s * 2) >= reqW && h / (s * 2) >= reqH) s *= 2
+        if (reqW > 0 && reqH > 0) {
+            while (w / (s * 2) >= reqW && h / (s * 2) >= reqH) s *= 2
+        }
+        while (maxOf(w, h) / s > MAX_EDGE_PX) s *= 2
         return s
     }
+
+    private const val MAX_EDGE_PX = 4096
 }

@@ -44,10 +44,11 @@ object Config {
     const val MUSIC_VOLUME = 0.35f
 
     // Calculator
-    const val ALLOWED_INPUT = "0123456789.+-*/()"
+    const val ALLOWED_INPUT = "0123456789.+-*/()"   // what the keypad / a keyboard may type
     const val MAX_EXPR_LENGTH = 60
-    const val RESULT_PRECISION_DIGITS = 15     // significant digits kept in a result
-    const val RESULT_MAX_PLAIN_DIGITS = 15     // longer results switch to scientific notation
+    const val RESULT_PRECISION_DIGITS = 15     // significant digits shown (the arithmetic itself is exact)
+    const val RESULT_MAX_PLAIN_DIGITS = 15     // integer part longer than this -> scientific (1E+15)
+    const val RESULT_MIN_PLAIN_EXPONENT = -6   // smaller than 0.000001 -> scientific (1E-7)
 
     /** How a full-screen image is fitted to the (non 420x620) phone screen. */
     enum class Fit { COVER, STRETCH, CONTAIN }

@@ -6,11 +6,11 @@ from pathlib import Path
 WIDTH, HEIGHT = 420, 620
 TITLE = "Calc (short for calculator btw)"
 
-#
+# --- files (same folder as this script) ---
 BG_IMAGE = "diddy.png.jpeg"        # background
 MUSIC_FILE = "epstien.mp3"     # bg music
-OVERLAY_IMAGE = "image.png"  # half-opacity image
-OVERLAY_SOUND = "call.mp3"  # sound when fade completes
+OVERLAY_IMAGE = "image.png"  # image faded in on "="
+OVERLAY_SOUND = "call.mp3"  # sound played the instant the fade starts
 
 FONT_NAME = None
 DISPLAY_HEIGHT = 90
@@ -19,8 +19,8 @@ TEXT_COLOR = (255, 255, 255)
 OUTLINE_WIDTH = 2   # set 0 for fully invisible buttons
 
 # Fade config
-OVERLAY_TARGET_ALPHA = 245  # 50%
-OVERLAY_FADE_TIME = 1    # seconds (0.4s) from 0 -> target
+OVERLAY_TARGET_ALPHA = 245  # 0..255 (245 is ~96% opaque)
+OVERLAY_FADE_TIME = 1    # seconds from 0 -> target
 
 # --- pygame init ---
 pygame.init()
@@ -119,13 +119,11 @@ def force_evaluate_to_67(_):
 # --- overlay state (stays until you press C) ---
 overlay_active = False
 overlay_alpha = 0.0
-overlay_sound_played = False
 
 def trigger_overlay():
-    global overlay_active, overlay_alpha, overlay_sound_played
+    global overlay_active, overlay_alpha
     overlay_active = True
     overlay_alpha = 0.0
-    overlay_sound_played = True  # mark as played (we'll play it now)
 
     # play the sound the instant the fade begins
     if overlay_sfx is not None:
@@ -136,10 +134,9 @@ def trigger_overlay():
 
 
 def cancel_overlay():
-    global overlay_active, overlay_alpha, overlay_sound_played
+    global overlay_active, overlay_alpha
     overlay_active = False
     overlay_alpha = 0.0
-    overlay_sound_played = False
 
 # --- layout ---
 grid = [
@@ -178,8 +175,6 @@ for r in range(rows):
         x = margin + c*(btn_w + margin)
         y = grid_top + r*(btn_h + margin)
         buttons.append(Button((x, y, btn_w, btn_h), label, on_button))
-
-# Calc (short for calculator btw)
 
 def draw_display(surf, expression):
     panel = pygame.Surface((WIDTH - 2*margin, DISPLAY_HEIGHT), pygame.SRCALPHA)
@@ -244,8 +239,6 @@ while running:
                 overlay_alpha += (OVERLAY_TARGET_ALPHA / OVERLAY_FADE_TIME) * dt
                 if overlay_alpha > OVERLAY_TARGET_ALPHA:
                     overlay_alpha = OVERLAY_TARGET_ALPHA
-
-
 
         temp = overlay_img.copy()
         temp.set_alpha(int(overlay_alpha))
