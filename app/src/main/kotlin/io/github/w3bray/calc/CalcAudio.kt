@@ -90,6 +90,11 @@ class CalcAudio(private val context: Context) {
         sfx.add(player)
     }
 
+    /** Stops the surprise sound (called when the image is gone). */
+    fun stopOverlaySound() {
+        stopEffects()
+    }
+
     /** Called from Activity.onPause: pause the music and cut any sound effect short. */
     fun pauseAll() {
         music?.let { if (it.safeIsPlaying()) it.safePause() }

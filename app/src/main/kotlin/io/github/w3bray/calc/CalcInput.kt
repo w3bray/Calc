@@ -208,13 +208,7 @@ class CalcInput(private val maxLength: Int = Config.MAX_EXPR_LENGTH) {
         // Only "(" / operators typed so far: nothing to compute yet, keep the text as it is.
         if (Evaluator.isAccepted(expr) && Evaluator.isBlank(expr)) return Event.NONE
 
-        val boundValue = boundAnswer()
-        val result = if (boundValue != null) {
-            Evaluator.evaluate(Evaluator.ANSWER_TOKEN + expr.substring(answerText!!.length), boundValue)
-        } else {
-            Evaluator.evaluate(expr)
-        }
-
+        val result = computeResult()
         return if (result == null) {
             expr = ""
             error = true
@@ -229,6 +223,45 @@ class CalcInput(private val maxLength: Int = Config.MAX_EXPR_LENGTH) {
             justEvaluated = true
             Event.EVALUATED
         }
+    }
+
+    /** Evaluates [expr] exactly as "=" would (exact answer binding included), without changing state. */
+    private fun computeResult(): Evaluator.Result? {
+        val boundValue = boundAnswer()
+        return if (boundValue != null) {
+            Evaluator.evaluate(Evaluator.ANSWER_TOKEN + expr.substring(answerText!!.length), boundValue)
+        } else {
+            Evaluator.evaluate(expr)
+        }
+    }
+
+    /**
+     * Live preview of the result while typing (what "=" would show), or null when there is nothing
+     * worth previewing: a result is on screen, an error, nothing evaluable yet, a lone number, or an
+     * expression that would be an error (e.g. division by zero).
+     */
+    fun preview(): String? {
+        if (error || justEvaluated || expr.isEmpty()) return null
+        if (!Evaluator.isAccepted(expr) || Evaluator.isBlank(expr)) return null
+        val normalized = Evaluator.normalize(expr) ?: return null
+        if (!hasOperation(normalized)) return null // a lone number: nothing to preview
+        return computeResult()?.display
+    }
+
+    /** True when [s] contains a binary operation or an implicit multiplication such as "2(3)". */
+    private fun hasOperation(s: String): Boolean {
+        for (i in 1 until s.length) {
+            val c = s[i]
+            val p = s[i - 1]
+            val pEndsNumber = p in '0'..'9' || p == '.' || p == ')'
+            when {
+                c == '+' || c == '*' || c == '/' -> return true
+                c == '-' && pEndsNumber -> return true // binary minus ("E-7" has p == 'E')
+                c == '(' && pEndsNumber -> return true // 2(3), (2)(3)
+                p == ')' && (c in '0'..'9' || c == '.') -> return true // (2)3
+            }
+        }
+        return false
     }
 
     private companion object {

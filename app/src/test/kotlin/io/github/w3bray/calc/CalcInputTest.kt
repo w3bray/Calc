@@ -378,6 +378,37 @@ class CalcInputTest {
         assertEquals("", c.expr)
     }
 
+    private fun previewOf(keys: String): String? {
+        val c = CalcInput()
+        type(c, keys)
+        return c.preview()
+    }
+
+    @Test fun previewShowsWhatEqualsWouldGive() {
+        val cases = mapOf(
+            "12+3" to "15", "2*(3+4" to "14", "10/4" to "2.5", "2(3)" to "6", "(2)3" to "6", "5-8" to "-3",
+            "1/3*3" to "1", "0.1+0.2" to "0.3", "12+3*" to "15", "2*(3+4)-" to "14",
+        )
+        val bad = cases.filter { (k, want) -> previewOf(k) != want }
+        assertTrue(bad.keys.joinToString("\n") { "$it => ${previewOf(it)} (expected ${cases[it]})" }, bad.isEmpty())
+    }
+
+    @Test fun previewIsAbsentWhenThereIsNothingToShow() {
+        for (keys in listOf("", "5", "-5", "(5", "(-5)", "5.", "5+", "5*(", "(", "-", "5/0", "1/(2-2)", "5+3=", "5/0=")) {
+            assertEquals("'$keys'", null, previewOf(keys))
+        }
+    }
+
+    @Test fun previewUsesTheExactAnswerAndDoesNotChangeState() {
+        val c = CalcInput()
+        type(c, "1/3=*3")
+        assertEquals("1", c.preview()) // exact binding, not 0.999999999999999
+        assertEquals("0.333333333333333*3", c.expr)
+        assertFalse(c.justEvaluated)
+        assertEquals(CalcInput.Event.EVALUATED, c.press("="))
+        assertEquals("1", c.expr)
+    }
+
     @Test fun eventsAreReportedCorrectly() {
         val c = CalcInput()
         assertEquals(CalcInput.Event.NONE, c.press("5"))
