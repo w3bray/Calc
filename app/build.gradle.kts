@@ -4,13 +4,15 @@ plugins {
 }
 
 // Signing: a shared keystore is committed in keystore/ so every build (local or CI)
-// produces the same signature and updates install over each other. Override with
-// environment variables if you ever want to use your own key (e.g. GitHub secrets).
-val calcKeystoreFile = System.getenv("CALC_KEYSTORE_FILE")?.let { file(it) }
+// produces the same signature and updates install over each other. To use your own key,
+// set the CALC_* environment variables (the workflow maps GitHub Secrets of the same names;
+// empty values are treated as unset so the fallback below keeps working).
+fun env(name: String): String? = System.getenv(name)?.takeIf { it.isNotBlank() }
+val calcKeystoreFile = env("CALC_KEYSTORE_FILE")?.let { rootProject.file(it) }
     ?: rootProject.file("keystore/calc.jks")
-val calcKeystorePassword = System.getenv("CALC_KEYSTORE_PASSWORD") ?: "calc-67-67"
-val calcKeyAlias = System.getenv("CALC_KEY_ALIAS") ?: "calc"
-val calcKeyPassword = System.getenv("CALC_KEY_PASSWORD") ?: calcKeystorePassword
+val calcKeystorePassword = env("CALC_KEYSTORE_PASSWORD") ?: "calc-67-67"
+val calcKeyAlias = env("CALC_KEY_ALIAS") ?: "calc"
+val calcKeyPassword = env("CALC_KEY_PASSWORD") ?: calcKeystorePassword
 
 android {
     namespace = "io.github.w3bray.calc"
@@ -20,8 +22,8 @@ android {
         applicationId = "io.github.w3bray.calc"
         minSdk = 21
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
     }
 
     signingConfigs {

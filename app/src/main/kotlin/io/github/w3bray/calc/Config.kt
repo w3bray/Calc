@@ -31,8 +31,9 @@ object Config {
     const val OVERLAY_HOLD_TIME = 3.0f
     const val OVERLAY_FADE_OUT_TIME = 1.0f
 
-    // Surprise schedule: the overlay (with its sound) shows up on its own at a random moment
-    // between MIN and MAX seconds after the app comes to the front / after the previous one.
+    // Surprise schedule: the overlay (with its sound) shows up on its own after a random MIN..MAX
+    // seconds of foreground use (drawn on first launch and again after each surprise). Leaving the
+    // app pauses the countdown; coming back resumes it, never sooner than 3 s after the return.
     const val PRANK_ENABLED = true
     const val PRANK_MIN_INTERVAL_SECONDS = 20f
     const val PRANK_MAX_INTERVAL_SECONDS = 80f

@@ -177,7 +177,32 @@ class EvaluatorTest {
     @Test fun scientificNotationInput() = assertAll(mapOf(
         "1E+15" to "1E+15", "1.5E+15*2" to "3E+15", "1E-7*10" to "0.000001", "1E+5+1" to "100001", "2E3" to "2000",
         "1E-15*1000000000000000" to "1", "1.23456789012346E+15-1234567890123460" to "0", "1E+10000" to "1E+10000",
+        "1E-10000" to "1E-10000", "9.99E+10000" to "9.99E+10000",
     ))
+
+    @Test fun resultsBeyondTheExponentLimitOverflow() {
+        assertAllInvalid(listOf(
+            "1E+10000*10", "1E-10000/10", "1E+10001", "1E+9999*1E+9999", "9E+9999*9E+9999", "1E-10001",
+            "10E+10000", "1.0E+10001", "123456789E+10000", "0.5E-10001", "1E+99999999999",
+        ))
+        // every display the evaluator produces can be read back, right up to the limit
+        for (e in listOf(
+            "1E+10000", "1E+9999*10", "1E-10000", "1E-9999/10", "5E+9999*2", "1/3E+9987", "1E-9988/3", "2/3E+9990",
+            "1/7E+9986", "1.23456789012345E-9999", "1.23456789012345E+10000", "0.5E-9999", "0.5E+10001", "0E-20000", "0.0E+99999",
+        )) {
+            val r = Evaluator.evaluate(e)
+            assertNotNull("$e should evaluate", r)
+            assertEquals("display of $e must re-evaluate to itself", r!!.display, Evaluator.evaluate(r.display)!!.display)
+        }
+        assertEquals("3.33333333333333E-9988", eval("1/3E+9987"))
+        assertEquals("0", eval("0E-20000"))
+    }
+
+    @Test fun dotGluedToAnExponentIsInvalid() {
+        assertAllInvalid(listOf("1E+5.5", "2E3.5", "1E+0.5", "1E-7.5", "1.42857142857143E-5.5", "5.E+3.", "1E5."))
+        assertEquals("100000", eval("1E+5*.5*2")) // explicit multiplication still fine
+        assertEquals("200000", eval("1E+5(2)")) // implicit multiplication by a parenthesis still fine
+    }
 
     @Test fun answerTokenUsesTheExactValue() {
         val third = Evaluator.evaluate("1/3")!!

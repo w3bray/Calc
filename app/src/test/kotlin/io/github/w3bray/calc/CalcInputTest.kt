@@ -183,6 +183,45 @@ class CalcInputTest {
         "1/3=+B5=" to "0.333333333333334", "5-5=+B5=" to "5",
     ))
 
+    @Test fun backspaceIntoScientificResultDropsTheWholeExponent() = assertShown(mapOf(
+        "1/7000000=" to "1.42857142857143E-7",
+        "1/7000000=+B" to "1.42857142857143E-7",
+        "1/7000000=+BB" to "1.42857142857143",      // "…E-" is never shown
+        "1/7000000=+BB+1=" to "2.42857142857143",   // the "+" is an addition, not an exponent sign
+        "1/7000000=+BB*2=" to "2.85714285714286",
+        "1/7000000=+BB=" to "1.42857142857143",
+        "1/7000000=+B." to "1.42857142857143E-7",   // no dot inside an exponent
+        "${"9".repeat(29)}*${"9".repeat(29)}=+BB" to "1E+5",
+        "${"9".repeat(29)}*${"9".repeat(29)}=+BBB" to "1",
+        "${"9".repeat(29)}*${"9".repeat(29)}=+BBB+1=" to "2",
+        "${"9".repeat(29)}*${"9".repeat(29)}=+BBB-1=" to "0",
+        "0.0000001*0.00000001=+BBB" to "1",
+        "0.0000001*0.00000001=+BBB*2=" to "2",
+        "0.0000001*0.00000001=+BB5=" to "1E-15",     // editing the exponent digit itself still works
+    ))
+
+    @Test fun resultsOutsideTheExponentLimitAreAnError() {
+        val nine29 = "9".repeat(29)
+        val c = CalcInput()
+        type(c, "$nine29*$nine29=")
+        assertEquals("1E+58", c.expr)
+        var last = CalcInput.Event.EVALUATED
+        var steps = 0
+        while (last == CalcInput.Event.EVALUATED && steps < 400) {
+            last = type(c, "*$nine29=")
+            steps++
+            if (last == CalcInput.Event.EVALUATED) {
+                // every displayed result must still be readable by the evaluator
+                assertEquals(c.expr, Evaluator.evaluate(c.expr)!!.display)
+            }
+        }
+        assertEquals("overflow expected after ~343 steps, got $steps", CalcInput.Event.ERROR, last)
+        assertTrue(c.error)
+        val d = CalcInput()
+        d.restore("1E+10001", justEvaluated = true, error = false) // not displayable any more, but must not throw
+        assertFalse(d.justEvaluated)
+    }
+
     @Test fun backspaceIntoResultDigitsFallsBackToTheDisplayedValue() {
         val c = CalcInput()
         type(c, "1/3=*")

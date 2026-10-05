@@ -93,8 +93,22 @@ class CalcInput(private val maxLength: Int = Config.MAX_EXPR_LENGTH) {
 
     private fun fits(extraChars: Int): Boolean = expr.length + extraChars <= maxLength
 
-    /** The digits/dot run at the end of the expression, i.e. the number being typed. */
-    private fun currentNumber(): String = expr.takeLastWhile { it in '0'..'9' || it == '.' }
+    /**
+     * The number token at the end of the expression: digits/dot, plus an exponent part when the
+     * text is a scientific result such as "1.42857142857143E-7" (only results carry an 'E').
+     */
+    private fun currentNumber(): String = NUMBER_AT_END.find(expr)?.value ?: ""
+
+    /**
+     * Backspacing inside a scientific result can leave "…E", "…E+" or "…E-", text no key can
+     * produce; drop the dangling marker so the next key is never swallowed as an exponent.
+     */
+    private fun trimDanglingExponent() {
+        when {
+            expr.endsWith("E+") || expr.endsWith("E-") -> expr = expr.dropLast(2)
+            expr.endsWith("E") -> expr = expr.dropLast(1)
+        }
+    }
 
     /** After "=", digits, "." and "(" start a new expression. */
     private fun startFreshIfJustEvaluated() {
@@ -137,7 +151,7 @@ class CalcInput(private val maxLength: Int = Config.MAX_EXPR_LENGTH) {
     private fun typeDot() {
         startFreshIfJustEvaluated()
         val number = currentNumber()
-        if ('.' in number) return // one dot per number
+        if ('.' in number || 'E' in number) return // one dot per number, none inside an exponent
         val add = if (number.isEmpty()) "0." else "."
         if (fits(add.length)) expr += add
     }
@@ -157,12 +171,14 @@ class CalcInput(private val maxLength: Int = Config.MAX_EXPR_LENGTH) {
 
     private fun typeMinus() {
         val continued = continueFromResultIfJustEvaluated()
+        trimDanglingExponent() // defensive: never let "-" become an exponent sign
         if (last == '-') return // never "--"
         if (continued || fits(1)) expr += '-' // subtraction after a number / ")", unary minus elsewhere
     }
 
     private fun typeOperator(ch: Char) {
         val continued = continueFromResultIfJustEvaluated()
+        trimDanglingExponent() // defensive: never let "+" become an exponent sign
         while (isOperator(last)) expr = expr.dropLast(1) // "5*-" then "+" becomes "5+"
         if (expr.isEmpty() || last == '(') return
         if (continued || fits(1)) expr += ch
@@ -174,6 +190,7 @@ class CalcInput(private val maxLength: Int = Config.MAX_EXPR_LENGTH) {
             return
         }
         expr = expr.dropLast(1)
+        trimDanglingExponent() // "1E+58" ⌫ -> "1E+5" ⌫ -> "1" (the whole exponent goes at once)
         // Editing into the result's own digits means the text no longer stands for the exact value.
         val text = answerText
         if (text != null && !expr.startsWith(text)) {
@@ -212,5 +229,10 @@ class CalcInput(private val maxLength: Int = Config.MAX_EXPR_LENGTH) {
             justEvaluated = true
             Event.EVALUATED
         }
+    }
+
+    private companion object {
+        /** Trailing number token: "123", "1.5", ".5", "5." and scientific results "1.5E-7", "1E+58". */
+        val NUMBER_AT_END = Regex("""[0-9.]+(?:E[+-]?[0-9]*)?$""")
     }
 }

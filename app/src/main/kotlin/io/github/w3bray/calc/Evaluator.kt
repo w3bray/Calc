@@ -83,7 +83,11 @@ object Evaluator {
     const val ANSWER_TOKEN = 'A'
 
     private const val EXPONENT_CHAR = 'E'
-    private const val MAX_EXPONENT_MAGNITUDE = 10_000
+    private const val MAX_EXPONENT_MAGNITUDE = 10_000 // |decimal exponent| of any literal or result
+    private const val MAX_EXPONENT_DIGITS = 6 // lexeme guard, so "1E+99999999999" never reaches BigDecimal
+
+    /** Decimal exponent of the first significant digit (1234.5 -> 3, 0.00012 -> -4). */
+    private fun decimalExponent(d: BigDecimal): Long = d.precision().toLong() - d.scale() - 1
     private val OPERATORS = setOf('+', '-', '*', '/')
     private val ACCEPTED_CHARS: Set<Char> = (Config.ALLOWED_INPUT + EXPONENT_CHAR + ANSWER_TOKEN).toSet()
 
@@ -106,7 +110,13 @@ object Evaluator {
             val parser = Parser(normalized, answer)
             val value = parser.parseExpression()
             if (!parser.atEnd()) throw EvalException("unexpected '${parser.peek()}'")
-            Result(format(value.toBigDecimal(precision), maxPlainDigits, minPlainExponent), value)
+            val rounded = value.toBigDecimal(precision)
+            // Overflow, like a physical calculator: a result the number lexer could not read back
+            // (|exponent| > MAX_EXPONENT_MAGNITUDE) is an error rather than an unusable display.
+            if (rounded.signum() != 0 && abs(decimalExponent(rounded)) > MAX_EXPONENT_MAGNITUDE) {
+                throw EvalException("result too large or too small")
+            }
+            Result(format(rounded, maxPlainDigits, minPlainExponent), value)
         } catch (e: EvalException) {
             null
         } catch (e: ArithmeticException) {
@@ -138,8 +148,8 @@ object Evaluator {
     fun format(value: BigDecimal, maxPlainDigits: Int, minPlainExponent: Int): String {
         if (value.signum() == 0) return "0"
         val v = value.stripTrailingZeros()
-        val exponent = v.precision() - v.scale() - 1 // decimal exponent of the first significant digit
-        if (exponent in minPlainExponent until maxPlainDigits) return v.toPlainString()
+        val exponent = decimalExponent(v)
+        if (exponent in minPlainExponent.toLong() until maxPlainDigits.toLong()) return v.toPlainString()
         val digits = v.unscaledValue().abs().toString()
         val mantissa = if (digits.length == 1) digits else digits[0] + "." + digits.substring(1)
         val sign = if (v.signum() < 0) "-" else ""
@@ -221,14 +231,19 @@ object Evaluator {
                 val expStart = j
                 while (j < s.length && s[j] in '0'..'9') j++
                 if (j == expStart) throw EvalException("bad exponent")
+                if (j - expStart > MAX_EXPONENT_DIGITS) throw EvalException("exponent too large")
                 i = j
             }
+            // A dot glued to the number ("1E+5.5") is a malformed literal, not "times 0.5".
+            if (!atEnd() && s[i] == '.') throw EvalException("bad number")
             val decimal = BigDecimal(s.substring(start, i)) // accepts "5.", ".5", "1.5E+15"
-            if (abs(decimal.scale()) > MAX_EXPONENT_MAGNITUDE) throw EvalException("exponent too large")
+            if (decimal.signum() != 0 && abs(decimalExponent(decimal)) > MAX_EXPONENT_MAGNITUDE) {
+                throw EvalException("exponent too large")
+            }
             return Value.of(decimal)
         }
     }
 
-    /** Exposed for tests: the operator characters. */
+    /** The binary operator characters (used by CalcInput and the tests). */
     fun isOperator(c: Char): Boolean = c in OPERATORS
 }

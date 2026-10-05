@@ -52,8 +52,10 @@ class MainActivity : Activity(), CalcView.Listener {
     /**
      * Back (button or gesture) does NOT close the app unless Config.BACK_BUTTON_CLOSES_APP is true.
      * Home and the recent-apps screen keep working. Two paths cover every Android version:
-     * onBackPressed() below (the classic path, used while predictive back is off) and, on
-     * Android 13+, an OnBackInvokedCallback that swallows Back when predictive back is on.
+     * on Android 13+ an OnBackInvokedCallback registered at default priority swallows Back
+     * (the manifest opts in with android:enableOnBackInvokedCallback="true", so this is the
+     * path the system actually uses there, predictive back included); on older versions the
+     * classic onBackPressed() override below does the same.
      */
     private fun setupBackHandling() {
         if (Config.BACK_BUTTON_CLOSES_APP) return
