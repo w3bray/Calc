@@ -1,26 +1,26 @@
 # Calc (short for calculator btw)
 
-Uma "calculadora" para Android que, não importa o que você digite, responde **67**
-e faz um fade-in de uma imagem com um som em cima de tudo. O overlay só some
-quando você aperta **C**.
+Uma calculadora para Android que funciona como uma calculadora normal... até que, de
+tempos em tempos e sem aviso, uma imagem aparece em fade por cima de tudo, com um som,
+fica alguns segundos e some em fade out. Depois a calculadora segue como se nada tivesse
+acontecido. O botão Voltar não fecha o app.
 
-Este repositório tem duas versões do mesmo app:
+Este repositório tem duas versões:
 
 | Pasta      | O que é                                                                  |
 |------------|---------------------------------------------------------------------------|
-| `app/`     | **App Android nativo (Kotlin)** — gera o APK. Mesma lógica, mesmos nomes de arquivos, mesmas constantes da versão desktop. |
-| `desktop/` | O script original em Python/pygame (`desktop/calc.py`), preservado como referência. |
+| `app/`     | **App Android nativo (Kotlin)** — gera o APK. Calculadora de verdade + sustos aleatórios. |
+| `desktop/` | O script original em Python/pygame (`desktop/calc.py`), a versão "sempre dá 67", preservada como referência. |
 
 ## Baixar o APK
 
 Você não precisa instalar nada no computador: o GitHub Actions compila o APK sozinho.
 
-1. **Build de qualquer branch / PR:** abra a aba **Actions** → workflow **Build APK** →
-   clique no run → seção **Artifacts** → baixe `Calc-apk` (vem zipado, dentro está o `Calc.apk`).
-2. **Último build da `main`:** a cada push na `main` o workflow atualiza a pré-release
-   **`latest`**, com link fixo:
+1. **Último build da `main`** (link fixo, atualizado a cada push na `main`):
    `https://github.com/w3bray/Calc/releases/download/latest/Calc.apk`
-3. **Versão numerada:** crie uma tag `v1.0`, `v1.1`, ... (`git tag v1.0 && git push origin v1.0`)
+2. **Build de qualquer branch / PR:** aba **Actions** → workflow **Build APK** →
+   clique no run → seção **Artifacts** → baixe `Calc-apk` (vem zipado, dentro está o `Calc.apk`).
+3. **Versão numerada:** crie uma tag `v1.0`, `v1.1`, ... (`git tag v1.1 && git push origin v1.1`)
    e o workflow publica uma Release com o `Calc.apk` anexado.
 
 No celular, abra o `Calc.apk`, permita "instalar de fontes desconhecidas" para o app
@@ -28,57 +28,90 @@ que você usou para baixar (Chrome, Arquivos...) e instale. Todos os builds são
 assinados com a mesma chave (`keystore/calc.jks`), então uma versão nova instala por
 cima da anterior sem precisar desinstalar.
 
+## O que o app faz
+
+- **Calculadora normal**: `+ - * /`, parênteses, decimais, menos unário, precedência
+  correta, aritmética exata (`0.1+0.2` = `0.3`). Regras de uma calculadora de celular:
+  zero à esquerda é substituído, só um ponto por número, operador digitado em cima de
+  outro substitui, `)` só fecha o que está aberto, operador no fim é ignorado e parêntese
+  aberto é fechado automaticamente ao apertar `=`. Depois de `=`, um dígito começa uma
+  conta nova e um operador continua a partir do resultado. Divisão por zero e expressões
+  inválidas mostram `Erro` (ou `Error` fora do português); a próxima tecla limpa.
+- **Susto**: em um momento aleatório entre 20 e 80 segundos depois de o app abrir (e
+  depois de cada susto), `image.png` faz fade in de 1 s, fica 3 s, faz fade out de 1 s,
+  e `call.mp3` toca no instante em que o fade in começa. `C` manda a imagem embora na hora
+  (com fade out). Enquanto a imagem está na tela, os botões continuam funcionando.
+- **Voltar não fecha o app** (botão ou gesto). Home e a tela de apps recentes funcionam.
+- **Música de fundo** (`epstien.mp3`) em loop a 35 %, pausada quando o app sai de
+  primeiro plano (o susto também é cancelado e reprogramado quando o app volta).
+- Assets ausentes são apenas registrados no logcat e ignorados; sem fundo, o app desenha
+  o mesmo degradê cinza do script Python.
+
+Todos esses números ficam em `app/src/main/kotlin/io/github/w3bray/calc/Config.kt`:
+
+| Constante                                           | Padrão      | Efeito |
+|-----------------------------------------------------|-------------|--------|
+| `OVERLAY_FADE_IN_TIME` / `OVERLAY_HOLD_TIME` / `OVERLAY_FADE_OUT_TIME` | 1 s / 3 s / 1 s | duração de cada fase da imagem |
+| `OVERLAY_TARGET_ALPHA`                              | 245         | opacidade máxima (0 a 255) |
+| `PRANK_MIN_INTERVAL_SECONDS` / `PRANK_MAX_INTERVAL_SECONDS` | 20 / 80 | intervalo aleatório entre sustos |
+| `PRANK_ENABLED`                                     | `true`      | `false` desliga os sustos automáticos |
+| `PRANK_ON_EQUALS_CHANCE`                            | `0`         | chance (0 a 1) de o `=` também disparar a imagem; `1` reproduz o comportamento do script original |
+| `BACK_BUTTON_CLOSES_APP`                            | `false`     | `true` volta a deixar o botão Voltar fechar o app |
+| `MUSIC_VOLUME`                                      | `0.35`      | volume da música de fundo |
+| `BACKGROUND_FIT` / `OVERLAY_FIT`                    | `COVER`     | como as imagens preenchem a tela (`STRETCH` estica como o Python fazia) |
+
 ## Colocar suas imagens e sons
 
 Os arquivos ficam em **`app/src/main/assets/`** com os mesmos nomes que o `calc.py` usa:
 
 | Arquivo          | Uso                                         |
 |------------------|---------------------------------------------|
-| `diddy.png.jpeg` | imagem de fundo (sem ela: degradê cinza, igual ao Python) |
+| `diddy.png.jpeg` | imagem de fundo (sem ela: degradê cinza)    |
 | `epstien.mp3`    | música de fundo em loop, volume 35 %        |
-| `image.png`      | imagem que aparece em fade ao apertar `=` (um placeholder já vem incluído) |
-| `call.mp3`       | som tocado no instante em que o fade começa |
+| `image.png`      | a imagem do susto (um placeholder já vem incluído) |
+| `call.mp3`       | som tocado no instante em que o fade in começa |
 
-Nenhum é obrigatório: se faltar, o app registra um aviso no logcat (`[image] not found`,
-`[music] not found`, ...) e segue, exatamente como os `load_*_safe` do Python. Depois de
-colocar os arquivos, faça um push: o workflow gera um APK novo com eles embutidos.
-Detalhes em [`app/src/main/assets/README.md`](app/src/main/assets/README.md).
+Nenhum é obrigatório. Depois de colocar os arquivos, faça um push: o workflow gera um
+APK novo com eles embutidos. Detalhes em
+[`app/src/main/assets/README.md`](app/src/main/assets/README.md).
 
-## Compilar no seu computador (opcional)
+## Compilar e testar no seu computador (opcional)
 
 Requisitos: JDK 17+ e o Android SDK (platform 34 + build-tools 34.0.0; o Android
 Studio instala tudo). Com `ANDROID_HOME` apontando para o SDK:
 
 ```bash
-./gradlew assembleRelease
-# APK em: app/build/outputs/apk/release/app-release.apk
+./gradlew test              # testes unitários do avaliador e das regras de digitação
+./gradlew assembleRelease   # APK em app/build/outputs/apk/release/app-release.apk
+./gradlew installRelease    # instala num aparelho com depuração USB ligada
 ```
 
-Para instalar direto num aparelho com depuração USB ligada:
+## Estrutura
 
-```bash
-./gradlew installRelease
 ```
-
-## Como o Python virou Kotlin
-
-| Python (`desktop/calc.py`)                     | Android (`app/src/main/kotlin/io/github/w3bray/calc/`)              |
-|------------------------------------------------|---------------------------------------------------------------------|
-| bloco de constantes no topo                    | `Config.kt` (mesmos nomes: `BG_IMAGE`, `OVERLAY_TARGET_ALPHA`, ...)  |
-| `load_image_safe`, `load_music_safe`, `load_sound_safe` | `Media.kt` (imagens) e `CalcAudio.kt` (música + efeito)      |
-| `pygame.mixer.music` em loop a 35 %            | `MediaPlayer` em loop, `setVolume(0.35)`; pausa quando o app vai pro fundo |
-| `overlay_sfx.play()` no `trigger_overlay()`    | `CalcView.Listener.onOverlayTriggered()` → `CalcAudio.playOverlaySound()` |
-| `Button`, `grid`, `btn_w`/`btn_h`, `draw_display` | `CalcView.kt` — mesmas fórmulas de layout, aplicadas ao tamanho real da tela (área segura, fora das barras do sistema) |
-| `MOUSEBUTTONDOWN` dispara no *press*           | `ACTION_DOWN` dispara no toque, não no soltar                       |
-| `handle_keydown` (Enter, `=`, Backspace, Esc)  | `onKeyDown` com o mesmo mapeamento, para teclado físico             |
-| fade de `overlay_alpha` por `dt` a cada frame  | mesmo cálculo em `onDraw`, redesenhando a 60 fps até chegar em 245  |
-| `smoothscale` para 420x620 (estica)            | `Config.BACKGROUND_FIT` / `OVERLAY_FIT` = `COVER` (preenche a tela sem distorcer; `STRETCH` reproduz o comportamento do Python) |
-
-Diferenças de propósito: o layout é fluido (a grade ocupa a tela toda em vez de uma
-janela fixa de 420x620), a tela fica travada em retrato, os botões ganham um leve
-destaque enquanto pressionados, e a música pausa quando o app sai de primeiro plano.
-O app não usa nenhuma biblioteca externa (só o framework Android + Kotlin), por isso
-o APK é pequeno.
+.
+├── .github/workflows/build-apk.yml   # CI: testa, compila, publica artifact + releases
+├── app/
+│   ├── build.gradle.kts              # módulo Android (minSdk 21, targetSdk 34)
+│   └── src/
+│       ├── main/
+│       │   ├── AndroidManifest.xml
+│       │   ├── assets/               # <- suas imagens e sons vão aqui
+│       │   ├── kotlin/io/github/w3bray/calc/
+│       │   │   ├── Config.kt         # todos os ajustes (tempos, intervalos, arquivos)
+│       │   │   ├── Evaluator.kt      # avaliador de expressões (BigDecimal)
+│       │   │   ├── CalcInput.kt      # regras de digitação de uma calculadora normal
+│       │   │   ├── CalcView.kt       # desenho, toque, teclado, fade da imagem, timer do susto
+│       │   │   ├── CalcAudio.kt      # música de fundo + som do susto
+│       │   │   ├── Media.kt          # loader de imagens à prova de arquivo faltando
+│       │   │   └── MainActivity.kt   # ciclo de vida, edge-to-edge, botão Voltar
+│       │   └── res/                  # ícone, tema, strings (en / pt)
+│       └── test/kotlin/...           # testes JUnit de Evaluator e CalcInput
+├── desktop/calc.py                   # versão original pygame
+├── keystore/calc.jks                 # chave de assinatura compartilhada
+├── build.gradle.kts, settings.gradle.kts, gradle.properties
+└── gradlew, gradle/wrapper/          # Gradle 8.7 (baixa sozinho)
+```
 
 ## Assinatura
 
@@ -88,26 +121,3 @@ gerem APKs com a mesma assinatura. Não use essa chave para publicar na Play Sto
 se quiser trocar, defina as variáveis `CALC_KEYSTORE_FILE`, `CALC_KEYSTORE_PASSWORD`,
 `CALC_KEY_ALIAS` e `CALC_KEY_PASSWORD` (por exemplo via GitHub Secrets) e o
 `app/build.gradle.kts` usa a sua.
-
-## Estrutura
-
-```
-.
-├── .github/workflows/build-apk.yml   # CI: compila, publica artifact + releases
-├── app/
-│   ├── build.gradle.kts              # módulo Android (minSdk 21, targetSdk 34)
-│   └── src/main/
-│       ├── AndroidManifest.xml
-│       ├── assets/                   # <- suas imagens e sons vão aqui
-│       ├── kotlin/io/github/w3bray/calc/
-│       │   ├── Config.kt             # constantes (iguais ao Python)
-│       │   ├── Media.kt              # loader de imagens à prova de arquivo faltando
-│       │   ├── CalcAudio.kt          # música de fundo + som do overlay
-│       │   ├── CalcView.kt           # desenho, layout, toque, teclado, fade
-│       │   └── MainActivity.kt       # ciclo de vida, edge-to-edge, áudio
-│       └── res/                      # ícone, tema, strings
-├── desktop/calc.py                   # versão original pygame
-├── keystore/calc.jks                 # chave de assinatura compartilhada
-├── build.gradle.kts, settings.gradle.kts, gradle.properties
-└── gradlew, gradle/wrapper/          # Gradle 8.7 (baixa sozinho)
-```

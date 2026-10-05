@@ -11,6 +11,7 @@ import android.graphics.Shader
 import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.util.TypedValue
 import android.view.KeyEvent
 import android.view.MotionEvent
@@ -18,29 +19,42 @@ import android.view.View
 import android.view.WindowInsets
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.random.Random
 
 /**
- * The whole calculator, drawn by hand on a Canvas exactly like the pygame main loop:
- * background -> display panel -> buttons -> overlay fade (on top of everything).
+ * The whole calculator, drawn by hand on a Canvas like the pygame main loop:
+ * background -> display panel -> buttons -> overlay (on top of everything).
+ *
+ * The overlay ("the image") fades in, holds, fades out, and is triggered by a random timer
+ * (see Config.PRANK_*). Calculator logic lives in [CalcInput] / [Evaluator].
  */
 class CalcView(context: Context) : View(context) {
 
     interface Listener {
-        /** Fired the instant the overlay fade begins (the desktop version plays a sound here). */
+        /** Fired the instant the overlay starts fading in (the activity plays the sound). */
         fun onOverlayTriggered()
     }
 
     var listener: Listener? = null
 
     // --- calculator state ---
-    var expr: String = ""
-        private set
+    val input = CalcInput()
+    private val errorText: String = context.getString(R.string.calc_error)
 
-    // --- overlay state (stays until you press C) ---
-    var overlayActive: Boolean = false
-        private set
+    // --- overlay state ---
+    private enum class OverlayPhase { OFF, FADE_IN, HOLD, FADE_OUT }
+
+    private var overlayPhase = OverlayPhase.OFF
     private var overlayAlpha = 0f
+    private var phaseElapsed = 0f
     private var lastFrameNanos = 0L
+
+    val overlayVisible: Boolean
+        get() = overlayPhase != OverlayPhase.OFF
+
+    // --- surprise schedule ---
+    private var pranksArmed = false
+    private val prankRunnable = Runnable { onPrankTimer() }
 
     // --- assets ---
     private var background: Bitmap? = null
@@ -115,6 +129,11 @@ class CalcView(context: Context) : View(context) {
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         requestApplyInsets()
+    }
+
+    override fun onDetachedFromWindow() {
+        removeCallbacks(prankRunnable)
+        super.onDetachedFromWindow()
     }
 
     override fun onApplyWindowInsets(insets: WindowInsets): WindowInsets {
@@ -221,31 +240,18 @@ class CalcView(context: Context) : View(context) {
 
     private fun buttonAt(x: Float, y: Float): Button? = buttons.firstOrNull { it.rect.contains(x, y) }
 
-    private fun sanitizeInput(ch: Char): String = if (ch in Config.ALLOWED_INPUT) ch.toString() else ""
-
-    @Suppress("UNUSED_PARAMETER")
-    private fun forceEvaluateTo67(expression: String): String = Config.FORCED_RESULT
-
     private fun onButton(label: String) {
-        when (label) {
-            "C" -> {
-                expr = ""
-                cancelOverlay()
-            }
-            "⌫" -> {
-                expr = expr.dropLast(1)
-                // overlay persists until 'C' by design
-            }
-            "=" -> {
-                expr = forceEvaluateTo67(expr)
-                triggerOverlay()
-            }
-            else -> {
-                expr += label.filter { it in Config.ALLOWED_INPUT }
-                // overlay persists until 'C' by design
-            }
+        when (input.press(label)) {
+            CalcInput.Event.EVALUATED -> maybePrankOnEquals()
+            CalcInput.Event.CLEARED -> dismissOverlay() // "C" also sends a visible overlay away early
+            else -> {}
         }
         invalidate()
+    }
+
+    private fun maybePrankOnEquals() {
+        val chance = Config.PRANK_ON_EQUALS_CHANCE
+        if (chance > 0f && Random.nextFloat() < chance) triggerOverlay()
     }
 
     /** Hardware keyboard support, same mapping as handle_keydown() on the desktop. */
@@ -267,11 +273,8 @@ class CalcView(context: Context) : View(context) {
             if (c == '=') {
                 onButton("="); return true
             }
-            val s = sanitizeInput(c)
-            if (s.isNotEmpty()) {
-                expr += s
-                invalidate()
-                return true
+            if (c in Config.ALLOWED_INPUT) {
+                onButton(c.toString()); return true
             }
         }
         return super.onKeyDown(keyCode, event)
@@ -279,31 +282,77 @@ class CalcView(context: Context) : View(context) {
 
     // ------------------------------------------------------------------ overlay
 
-    private fun triggerOverlay() {
-        overlayActive = true
+    /** Starts the fade-in (and the sound) unless the overlay is already showing. */
+    fun triggerOverlay() {
+        if (overlayPhase != OverlayPhase.OFF) return
+        removeCallbacks(prankRunnable)
+        overlayPhase = OverlayPhase.FADE_IN
         overlayAlpha = 0f
+        phaseElapsed = 0f
         lastFrameNanos = 0L
-        // play the sound the instant the fade begins
-        listener?.onOverlayTriggered()
+        Log.i(Media.TAG, "[overlay] fade in")
+        listener?.onOverlayTriggered() // play the sound the instant the fade begins
         postInvalidateOnAnimation()
     }
 
-    private fun cancelOverlay() {
-        overlayActive = false
+    /** Skips straight to the fade-out if the overlay is visible. */
+    fun dismissOverlay() {
+        if (overlayPhase == OverlayPhase.FADE_IN || overlayPhase == OverlayPhase.HOLD) {
+            overlayPhase = OverlayPhase.FADE_OUT
+            phaseElapsed = 0f
+            postInvalidateOnAnimation()
+        }
+    }
+
+    /** Removes the overlay immediately (used when the app goes to the background). */
+    fun cancelOverlayNow() {
+        overlayPhase = OverlayPhase.OFF
         overlayAlpha = 0f
+        phaseElapsed = 0f
+        invalidate()
+    }
+
+    /** Arms the random timer (call from Activity.onResume). */
+    fun startPranks() {
+        pranksArmed = true
+        scheduleNextPrank()
+    }
+
+    /** Disarms the random timer (call from Activity.onPause). */
+    fun stopPranks() {
+        pranksArmed = false
+        removeCallbacks(prankRunnable)
+    }
+
+    private fun scheduleNextPrank() {
+        removeCallbacks(prankRunnable)
+        if (!pranksArmed || !Config.PRANK_ENABLED) return
+        val lo = min(Config.PRANK_MIN_INTERVAL_SECONDS, Config.PRANK_MAX_INTERVAL_SECONDS).coerceAtLeast(1f)
+        val hi = max(Config.PRANK_MIN_INTERVAL_SECONDS, Config.PRANK_MAX_INTERVAL_SECONDS)
+        val seconds = if (hi > lo) Random.nextDouble(lo.toDouble(), hi.toDouble()).toFloat() else lo
+        Log.i(Media.TAG, "[overlay] next surprise in %.1f s".format(seconds))
+        postDelayed(prankRunnable, (seconds * 1000f).toLong())
+    }
+
+    private fun onPrankTimer() {
+        if (!pranksArmed) return
+        if (overlayPhase == OverlayPhase.OFF) triggerOverlay() else scheduleNextPrank()
     }
 
     // ------------------------------------------------------------------ state
 
     fun saveState(out: Bundle) {
-        out.putString(KEY_EXPR, expr)
-        out.putBoolean(KEY_OVERLAY, overlayActive)
+        out.putString(KEY_EXPR, input.expr)
+        out.putBoolean(KEY_JUST_EVALUATED, input.justEvaluated)
+        out.putBoolean(KEY_ERROR, input.error)
     }
 
     fun restoreState(saved: Bundle) {
-        expr = saved.getString(KEY_EXPR, "")
-        overlayActive = saved.getBoolean(KEY_OVERLAY, false)
-        overlayAlpha = if (overlayActive) Config.OVERLAY_TARGET_ALPHA.toFloat() else 0f
+        input.restore(
+            saved.getString(KEY_EXPR, ""),
+            saved.getBoolean(KEY_JUST_EVALUATED, false),
+            saved.getBoolean(KEY_ERROR, false),
+        )
         invalidate()
     }
 
@@ -323,21 +372,51 @@ class CalcView(context: Context) : View(context) {
         drawDisplay(canvas)
         for (b in buttons) drawButton(canvas, b)
 
-        // overlay fade and sound (drawn ON TOP of everything)
-        if (overlayActive) {
-            val now = System.nanoTime()
-            val dt = if (lastFrameNanos == 0L) 0f else (now - lastFrameNanos) / 1_000_000_000f
-            lastFrameNanos = now
-            val target = Config.OVERLAY_TARGET_ALPHA.toFloat()
-            if (overlayAlpha < target) {
-                overlayAlpha = if (Config.OVERLAY_FADE_TIME <= 0f) {
-                    target
-                } else {
-                    min(target, overlayAlpha + (target / Config.OVERLAY_FADE_TIME) * dt)
-                }
+        // overlay: fade in -> hold -> fade out, drawn ON TOP of everything
+        if (overlayPhase != OverlayPhase.OFF) {
+            advanceOverlay()
+            if (overlayPhase != OverlayPhase.OFF) {
+                overlayImg?.let { drawFitted(canvas, it, Config.OVERLAY_FIT, overlayAlpha.toInt()) }
                 postInvalidateOnAnimation()
             }
-            overlayImg?.let { drawFitted(canvas, it, Config.OVERLAY_FIT, overlayAlpha.toInt()) }
+        }
+    }
+
+    /** Advances the overlay animation by the time since the previous frame. */
+    private fun advanceOverlay() {
+        val now = System.nanoTime()
+        val raw = if (lastFrameNanos == 0L) 0f else (now - lastFrameNanos) / 1_000_000_000f
+        lastFrameNanos = now
+        val dt = min(raw, MAX_FRAME_DT) // a long pause must not make the animation jump
+        val target = Config.OVERLAY_TARGET_ALPHA.toFloat()
+
+        when (overlayPhase) {
+            OverlayPhase.FADE_IN -> {
+                overlayAlpha = if (Config.OVERLAY_FADE_IN_TIME <= 0f) target
+                else min(target, overlayAlpha + (target / Config.OVERLAY_FADE_IN_TIME) * dt)
+                if (overlayAlpha >= target) {
+                    overlayPhase = OverlayPhase.HOLD
+                    phaseElapsed = 0f
+                }
+            }
+            OverlayPhase.HOLD -> {
+                phaseElapsed += dt
+                if (phaseElapsed >= Config.OVERLAY_HOLD_TIME) {
+                    overlayPhase = OverlayPhase.FADE_OUT
+                    phaseElapsed = 0f
+                }
+            }
+            OverlayPhase.FADE_OUT -> {
+                overlayAlpha = if (Config.OVERLAY_FADE_OUT_TIME <= 0f) 0f
+                else max(0f, overlayAlpha - (target / Config.OVERLAY_FADE_OUT_TIME) * dt)
+                if (overlayAlpha <= 0f) {
+                    overlayPhase = OverlayPhase.OFF
+                    overlayAlpha = 0f
+                    Log.i(Media.TAG, "[overlay] gone")
+                    scheduleNextPrank()
+                }
+            }
+            OverlayPhase.OFF -> {}
         }
     }
 
@@ -356,7 +435,7 @@ class CalcView(context: Context) : View(context) {
             val top = (vh - dh) / 2f
             dstRect.set(left, top, left + dw, top + dh)
         }
-        bitmapPaint.alpha = alpha
+        bitmapPaint.alpha = alpha.coerceIn(0, 255)
         canvas.drawBitmap(bmp, null, dstRect, bitmapPaint)
     }
 
@@ -364,7 +443,7 @@ class CalcView(context: Context) : View(context) {
         // translucent panel so the background shows through
         canvas.drawRect(panelRect, panelPaint)
 
-        val text = expr.ifEmpty { "0" }
+        val text = input.displayText(errorText)
         val maxWidth = panelRect.width() - 2 * margin
         fontBig.textSize = fontBigSize
         var textWidth = fontBig.measureText(text)
@@ -400,6 +479,8 @@ class CalcView(context: Context) : View(context) {
 
     private companion object {
         const val KEY_EXPR = "calc.expr"
-        const val KEY_OVERLAY = "calc.overlayActive"
+        const val KEY_JUST_EVALUATED = "calc.justEvaluated"
+        const val KEY_ERROR = "calc.error"
+        const val MAX_FRAME_DT = 0.25f
     }
 }

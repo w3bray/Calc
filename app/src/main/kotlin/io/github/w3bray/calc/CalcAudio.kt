@@ -69,21 +69,24 @@ class CalcAudio(private val context: Context) {
         player.start()
     }
 
-    /** Called from Activity.onPause: never keep playing while the app is in the background. */
+    /** Called from Activity.onPause: pause the music and cut any sound effect short. */
     fun pauseAll() {
         music?.let { if (it.isPlaying) it.pause() }
-        for (p in sfx) if (p.isPlaying) p.pause()
+        stopEffects()
     }
 
     /** Called from Activity.onResume. */
     fun resumeAll() {
         startMusic()
-        for (p in sfx) if (!p.isPlaying) p.start()
     }
 
     fun release() {
         music?.release()
         music = null
+        stopEffects()
+    }
+
+    private fun stopEffects() {
         for (p in sfx) p.release()
         sfx.clear()
     }

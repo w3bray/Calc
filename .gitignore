@@ -5,10 +5,11 @@ local.properties
 .cxx/
 captures/
 
-# IDEs
+# IDEs / tooling
 .idea/
 *.iml
 .vscode/
+.claude/worktrees/
 
 # OS
 .DS_Store

@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Calc</string>
+    <!-- Shown on the display when an expression cannot be evaluated (e.g. division by zero). -->
+    <string name="calc_error">Error</string>
 </resources>
