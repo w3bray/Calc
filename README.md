@@ -92,7 +92,7 @@ APK novo com eles embutidos. Detalhes em
 
 ## Compilar e testar no seu computador (opcional)
 
-Requisitos: JDK 17+ e o Android SDK (platform 34 + build-tools 34.0.0; o Android
+Requisitos: JDK 17+ e o Android SDK (platform 36 + build-tools 35.0.0; o Android
 Studio instala tudo). Com `ANDROID_HOME` apontando para o SDK:
 
 ```bash
@@ -107,7 +107,7 @@ Studio instala tudo). Com `ANDROID_HOME` apontando para o SDK:
 .
 ├── .github/workflows/build-apk.yml   # CI: testa, compila, publica artifact + releases
 ├── app/
-│   ├── build.gradle.kts              # módulo Android (minSdk 21, targetSdk 34)
+│   ├── build.gradle.kts              # módulo Android (minSdk 21, targetSdk 36)
 │   └── src/
 │       ├── main/
 │       │   ├── AndroidManifest.xml
@@ -125,14 +125,37 @@ Studio instala tudo). Com `ANDROID_HOME` apontando para o SDK:
 ├── desktop/calc.py                   # versão original pygame
 ├── keystore/calc.jks                 # chave de assinatura compartilhada
 ├── build.gradle.kts, settings.gradle.kts, gradle.properties
-└── gradlew, gradle/wrapper/          # Gradle 8.7 (baixa sozinho)
+└── gradlew, gradle/wrapper/          # Gradle 8.13 (baixa sozinho)
 ```
+
+## Publicar para amigos pela Play Store (sem avisos)
+
+APK instalado fora da Play Store mostra aviso do Chrome ("arquivo pode ser nocivo") e, desde
+30/09/2026 no Brasil, o Play Protect bloqueia apps de desenvolvedores não verificados. Pelo
+**teste interno** da Play Store seus amigos instalam pela própria loja, sem aviso nenhum
+(até 100 testadores, sem revisão do Google):
+
+1. Crie a conta de desenvolvedor em https://play.google.com/console (taxa única de US$ 25 e
+   verificação de identidade).
+2. **Criar app** → nome `Calc`, tipo App, gratuito.
+3. Menu **Testar e lançar → Teste interno → Criar nova versão**. Aceite o *Play App Signing*
+   (o Google guarda a chave final do app) e envie o `Calc.aab`.
+4. Na aba **Testadores**, crie uma lista com os e-mails Google dos amigos, salve e publique a
+   versão. Copie o **link de participação** e mande para eles: cada um abre o link, aceita
+   e instala pela Play Store.
+5. Atualizações: suba `versionCode` no `app/build.gradle.kts`, faça push e envie o novo
+   `Calc.aab` (artifact `Calc-aab` do Actions, ou anexado às releases) numa nova versão.
+
+O `.aab` precisa ser assinado com a **chave de envio privada** (veja abaixo), nunca com a
+chave pública do repositório.
 
 ## Assinatura
 
 `keystore/calc.jks` é uma chave gerada só para este projeto (senha `calc-67-67`,
-alias `calc`). Ela está no repositório de propósito, para que o CI e qualquer clone
-gerem APKs com a mesma assinatura. Não use essa chave para publicar na Play Store.
+alias `calc`). Ela está no repositório de propósito, só para builds locais e de teste.
+Como ela é pública, **nunca** a use para a Play Store nem para cadastro de desenvolvedor:
+para isso existe a chave de envio privada (`calc-upload.jks`, alias `upload`), que fica
+fora do repositório e entra no CI pelos segredos abaixo.
 
 Para assinar com uma chave sua:
 - **No CI**: crie em Settings → Secrets and variables → Actions os segredos

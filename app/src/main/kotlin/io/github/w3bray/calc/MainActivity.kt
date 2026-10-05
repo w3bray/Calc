@@ -1,5 +1,6 @@
 package io.github.w3bray.calc
 
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.graphics.Color
 import android.media.AudioManager
@@ -66,6 +67,10 @@ class MainActivity : Activity(), CalcView.Listener {
         }
     }
 
+    // Only reached on Android 12 and older: on Android 13+ the OnBackInvokedCallback registered
+    // in setupBackHandling() receives Back (gestures included), so the lint warning about
+    // gesture navigation does not apply here.
+    @SuppressLint("GestureBackNavigation")
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         if (Config.BACK_BUTTON_CLOSES_APP) {
