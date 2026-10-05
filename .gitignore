@@ -1,0 +1,19 @@
+# Gradle / Android build output
+.gradle/
+build/
+local.properties
+.cxx/
+captures/
+
+# IDEs
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python (desktop version)
+__pycache__/
+*.pyc

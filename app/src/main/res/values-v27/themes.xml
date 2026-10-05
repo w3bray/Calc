@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- On Android 8.1+ also draw behind the display cutout (notch). -->
+    <style name="Theme.Calc" parent="Theme.Calc.Base">
+        <item name="android:windowLayoutInDisplayCutoutMode">shortEdges</item>
+    </style>
+</resources>

@@ -1,0 +1,84 @@
+name: Build APK
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build signed release APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-34 build-tools;34.0.0"
+
+      - name: Set up Gradle (with cache)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build release APK
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace assembleRelease
+
+      - name: Collect APK
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk Calc.apk
+          ls -la Calc.apk
+
+      # Every run (any branch / PR) keeps the APK as a downloadable artifact.
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Calc-apk
+          path: Calc.apk
+          if-no-files-found: error
+
+      # Pushes to main publish a rolling "latest" pre-release with a stable download URL:
+      # https://github.com/<owner>/<repo>/releases/download/latest/Calc.apk
+      - name: Move "latest" tag to this commit
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git tag -f latest
+          git push -f origin latest
+
+      - name: Publish rolling "latest" pre-release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: Latest build (main)
+          prerelease: true
+          files: Calc.apk
+          body: |
+            Build automático do último commit em `main` (`${{ github.sha }}`).
+            Baixe `Calc.apk`, instale no Android (permita "fontes desconhecidas") e pronto.
+
+      # Tags like v1.0 publish a proper versioned release.
+      - name: Publish versioned release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Calc.apk
+          generate_release_notes: true
